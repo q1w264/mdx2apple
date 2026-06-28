@@ -145,7 +145,7 @@ def clean_entry(entry):
                         clean_parts.append(f"<p class='ex'>• {ex_text}</p>")
                     examples_found += 1
                 
-                clean_parts.append("</li>")
+                clean_parts.append("")
             clean_parts.append("</ol>")
         
         # Fallback: if no structured content, get plain text
@@ -179,8 +179,8 @@ def clean_xml(input_path, output_path):
     print("Cleaning entries...")
     clean_entries = []
     for i, entry in enumerate(entries):
-        if i % 5000 == 0:
-            print(f"  Progress: {i}/{len(entries)}")
+        if i % 10000 == 0:
+            print(f"   Progress: {i}/{len(entries)}")
         cleaned = clean_entry(entry)
         if cleaned:
             clean_entries.append(cleaned)
@@ -306,12 +306,16 @@ clean:
 
 
 def convert_mdx(mdx_path, output_dir):
-    """Convert MDX to AppleDict source using pyglossary."""
+    """Convert MDX to AppleDict source using inline python execution to bypass wrapper bugs."""
     print(f"Converting {mdx_path} to AppleDict format...")
     
-    # Use pyglossary
+    # 绕过所有外部命令，直接用当前 python 解释器执行精准的内部入口
+    inline_code = "from pyglossary.ui.main import main; main()"
+    
     cmd = [
-        sys.executable, "-m", "pyglossary",
+        sys.executable,
+        "-c",
+        inline_code,
         str(mdx_path),
         str(output_dir / "temp.apple"),
         "--write-format=AppleDict",
@@ -322,7 +326,7 @@ def convert_mdx(mdx_path, output_dir):
     if result.returncode != 0:
         print(f"Error: pyglossary failed:\n{result.stderr}")
         sys.exit(1)
-    
+        
     return output_dir / "temp.apple"
 
 
@@ -336,7 +340,7 @@ def main():
     parser.add_argument("--identifier", help="Bundle identifier (e.g., com.example.dict)")
     parser.add_argument("--install", action="store_true", help="Install after building")
     parser.add_argument("--keep-resources", action="store_true", 
-                       help="Include audio/image resources (large)")
+                        help="Include audio/image resources (large)")
     
     args = parser.parse_args()
     
@@ -424,7 +428,8 @@ def main():
             shutil.move(str(output_dir / "OtherResources"), "/tmp/mdx2apple_resources")
             resources_moved = True
         
-        result = subprocess.run(["make"], capture_output=True, text=True)
+        # 显式注入正确的 DDK 变量进行编译
+        result = subprocess.run(["make", f"DICT_BUILD_TOOL_DIR={ddk_path}"], capture_output=True, text=True)
         if result.returncode != 0:
             print(f"Build failed:\n{result.stderr}")
             sys.exit(1)
